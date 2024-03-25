@@ -1,6 +1,7 @@
 # Local data
 MMs/
 MiSeq_SOP/
+jupyter-notebooks/analysis
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

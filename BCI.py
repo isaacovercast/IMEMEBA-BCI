@@ -17,6 +17,9 @@ class BCI:
         # Path to the input data file which may be manipulated
         # by the .transform() function
         self.data = data
+        if not os.path.exists(self.data):
+            raise Exception(f"  Input data file not found: {self.data}")
+
         # Retain a reference to the untransformed data
         self._data = data
         # Get the name of this sample
@@ -59,6 +62,7 @@ class BCI:
             self.seed_files.append(f"{outfile}.htmp")
 
 
+    ## FIXME: Add a check that vsearch is installed
     ## FIXME: Make n_jobs dynamic
     def run(self, verbose=False):
         # Build the list of vsearch commands
