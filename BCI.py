@@ -93,12 +93,21 @@ class BCI:
         except Exception as inst:
             raise
 
-    def plot(self, ax=None, log=True, normalize=False, **kwargs):
+    def plot(self, ax=None, log=True, normalize=False, plot_pis=False, **kwargs):
         if not ax:
             fig, ax = plt.subplots(figsize=(8, 8))
         fig = ax.get_figure()
-        # log transform
-        dat = np.log(self.bci) if log else np.array(self.bci)
+
+        if plot_pis:
+            try:
+                dat = np.array(sorted(self.pis.values(), reverse=True))
+            except:
+                print("  BCI does not have pi data, giving up the plot.")
+                return None, None
+        else:
+            # log transform (pis have 0 values so don't like log'ing
+            dat = np.log(self.bci) if log else np.array(self.bci)
+
         # normalize
         norm = dat.sum() if normalize else 1
         ax.plot(np.array(dat)/norm, label=self._label, **kwargs)
@@ -274,7 +283,8 @@ class BCI:
         seq_df = self._fasta_to_df()
 
         for otu in otus:
-            zids = np.append(clusts.loc[otu].values, otu)
+            # Force zotu ids to be str to avoid conflict if zotu ids are auto-detected as int
+            zids = np.append(clusts.loc[otu].values.astype(str), otu)
             seqs = seq_df.loc[zids].values
             with open(f"{tmp_fastadir}/{otu}.fasta", 'w') as outfile:
                 for idx, seq in enumerate(seqs):
@@ -329,6 +339,26 @@ class BCI:
         return pd.Series(fastas, index=zotus)
 
 
+    def write_bci(self, outdir=None):
+        self.write_results(outdir=outdir, data="bci")
+
+    def write_pis(self, outdir=None):
+        self.write_results(outdir=outdir, data="pis")
+
+    def write_results(self, outdir=None, data="bci"):
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        if data == "bci":
+            data = self.bci
+        elif data == "pis":
+            data = [str(x) for x in self.pis.values()]
+        else:
+            raise Exception("  Bad 'data' in 'write_results'. Should be 'bci' or 'pis'.")
+
+        with open(os.path.join(outdir, self.samp)+".pis", 'w') as outfile:
+            outfile.write(",".join(sorted(data, reverse=True))+"\n")
+
+
 ###################
 # Utility functions
 ###################
@@ -353,11 +383,17 @@ def plot_multi(bci_list, ax=None, log=True, normalize=False, plot_pis=False, cma
             cmap = cm.get_cmap(v)(np.linspace(0.3, 0.9, len(bci_labels)))
             cdict.update({x:cmap[i] for i, x in enumerate(bci_labels)})
     else:
-        # use one colormap for all samples
-        cmap = cm.get_cmap(cmap)
+        # use one colormap for all samples. linspace trims off the 'edges' of the cmap
+        # to make it only use colors that are readily visible against a white background
+        cmap = cm.get_cmap(cmap)(np.linspace(0.3, 0.9, len(bci_list)))
         # Get a dictionary mapping bcis to evenly spaced color values in the cmap
         bci_labels = [x.samp for x in bci_list]
-        cdict = {x:cmap(i/len(bci_labels)) for i, x in enumerate(bci_labels)}
+        cdict = {x:cmap[i] for i, x in enumerate(bci_labels)}
+
+        # Alternate method for sampling cmaps that samples the full range
+        #cmap = cm.get_cmap(cmap)
+        #bci_labels = [x.samp for x in bci_list]
+        #cdict = {x:cmap(i/len(bci_labels)) for i, x in enumerate(bci_labels)}
 
     for bci in bci_list:
         if plot_pis:

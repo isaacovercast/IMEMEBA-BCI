@@ -2,6 +2,11 @@
 MMs/
 MiSeq_SOP/
 jupyter-notebooks/analysis
+# Ignore tmpdirs created by BCI.py
+.tmpdir*
+# Ignore directories with fasta or raw data
+*_fastas
+_zenodo_data
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
