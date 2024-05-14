@@ -10,6 +10,7 @@ _zenodo_data
 _dryad_data
 _github
 rawdata
+_rawdata
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
