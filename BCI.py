@@ -90,6 +90,8 @@ class BCI:
 
         try:
             self.nucleotide_diversity(simulated=simulated, verbose=verbose)
+        except pd.errors.EmptyDataError:
+            print(f"  No 3% diversity in {self._label}, skipping nucleotide diversity.")
         except Exception as inst:
             raise
 

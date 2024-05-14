@@ -7,6 +7,9 @@ jupyter-notebooks/analysis
 # Ignore directories with fasta or raw data
 *_fastas
 _zenodo_data
+_dryad_data
+_github
+rawdata
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
