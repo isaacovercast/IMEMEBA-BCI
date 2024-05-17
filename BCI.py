@@ -17,6 +17,7 @@ from scipy.stats import entropy
 class BCI:
     def __init__(self,
                  data,
+                 project_dir=".",
                  verbose=False):
         # Path to the input data file which may be manipulated
         # by the .transform() function
@@ -31,7 +32,7 @@ class BCI:
         # Is the input fastq or fasta?
         self._ftype = data.split(".")[-1]
 
-        self.tmpdir = f"./.tmpdir-{self.samp}"
+        self.tmpdir = f"{project_dir}/.tmpdir-{self.samp}"
         if not os.path.exists(self.tmpdir):
             os.mkdir(self.tmpdir)
 
