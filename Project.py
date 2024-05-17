@@ -166,10 +166,13 @@ class Project:
         pass
 
 
-    def plot_sites(self, include=None, exclude=None, plot_pis=False):
+    def plot_sites(self, ax=None, include=None, exclude=None, plot_pis=False, cmaps=None):
+        if cmaps == None:
+            cmaps = {"Spectral", self.sites}
 
-        fig, ax = BCI.plot_multi([bci for bci in self.site_bcis.values()],
-               log=False, normalize=False, plot_pis=plot_pis)
+        for cmap, sites in cmaps.items():
+            fig, ax = BCI.plot_multi([self.site_bcis[x] for x in sites],
+                   ax=ax, cmap=cmap, log=False, normalize=False, plot_pis=plot_pis)
 
         return fig, ax
 
