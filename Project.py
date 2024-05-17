@@ -38,6 +38,19 @@ class Project:
 
             self.site_fastas = self._make_site_fastas(verbose)
 
+        self.sample_bcis = {}
+        self.site_bcis = {}
+
+
+    @property
+    def samples(self):
+        return list(self.zotus_per_sample.keys())
+
+
+    @property
+    def sites(self):
+        return list(self.samples_per_site.keys())
+
 
     def _read_asv_table(self, asv_table, verbose=False):
 
@@ -132,28 +145,33 @@ class Project:
 
 
     def run(self, samples=True, sites=True, verbose=False):
-
-        self.sample_bcis, self.site_bcis = self._run(samples=samples, sites=sites, verbose=verbose)
-
-
-    def _run(self, samples=True, sites=True, verbose=False):
-        sample_bcis = {} 
         if samples:
-            print("  Processing {len(self.sample_fastas)} samples.")
+            print(f"  Processing {len(self.sample_fastas)} samples.")
             for sample, fasta in self.sample_fastas.items():
                 if verbose: print(sample)
-                sample_bcis[sample] = BCI.BCI(data=fasta, verbose=verbose)
-                sample_bcis[sample]._min_clust_threshold = 70
-                sample_bcis[sample].run()
+                self.sample_bcis[sample] = BCI.BCI(data=fasta, verbose=verbose)
+                self.sample_bcis[sample]._min_clust_threshold = 70
+                self.sample_bcis[sample].run()
 
-        site_bcis = {}
         if sites:
-            print("  Processing {len(self.site_fastas)} sites.")
+            print(f"  Processing {len(self.site_fastas)} sites.")
             for site, fasta in self.site_fastas.items():
                 if verbose: print(site)
-                sample_bcis[site] = BCI.BCI(data=fasta, verbose=verbose)
-                sample_bcis[site]._min_clust_threshold = 70
-                sample_bcis[site].run()
+                self.site_bcis[site] = BCI.BCI(data=fasta, verbose=verbose)
+                self.site_bcis[site]._min_clust_threshold = 70
+                self.site_bcis[site].run()
 
-        return sample_bcis, site_bcis
+
+    def plot_samples(self, include=None, exclude=None):
+        pass
+
+
+    def plot_sites(self, include=None, exclude=None, plot_pis=False):
+
+        fig, ax = BCI.plot_multi([bci for bci in self.site_bcis.values()],
+               log=False, normalize=False, plot_pis=plot_pis)
+
+        return fig, ax
+
+
 
