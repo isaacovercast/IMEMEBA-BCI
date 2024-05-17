@@ -131,25 +131,29 @@ class Project:
         return site_fastas
 
 
-    def run(self, verbose=False):
+    def run(self, samples=True, sites=True, verbose=False):
 
-        self.sample_bcis, self.site_bcis = self._run(verbose=verbose)
+        self.sample_bcis, self.site_bcis = self._run(samples=samples, sites=sites, verbose=verbose)
 
 
-    def _run(self, verbose=False):
+    def _run(self, samples=True, sites=True, verbose=False):
         sample_bcis = {} 
-        for sample, fasta in self.sample_fastas.items():
-            if verbose: print(sample)
-            sample_bcis[sample] = BCI.BCI(data=fasta, verbose=verbose)
-            sample_bcis[sample]._min_clust_threshold = 70
-            sample_bcis[sample].run()
+        if samples:
+            print("  Processing {len(self.sample_fastas)} samples.")
+            for sample, fasta in self.sample_fastas.items():
+                if verbose: print(sample)
+                sample_bcis[sample] = BCI.BCI(data=fasta, verbose=verbose)
+                sample_bcis[sample]._min_clust_threshold = 70
+                sample_bcis[sample].run()
 
         site_bcis = {}
-        for site, fasta in self.site_fastas.items():
-            if verbose: print(site)
-            sample_bcis[site] = BCI.BCI(data=fasta, verbose=verbose)
-            sample_bcis[site]._min_clust_threshold = 70
-            sample_bcis[site].run()
+        if sites:
+            print("  Processing {len(self.site_fastas)} sites.")
+            for site, fasta in self.site_fastas.items():
+                if verbose: print(site)
+                sample_bcis[site] = BCI.BCI(data=fasta, verbose=verbose)
+                sample_bcis[site]._min_clust_threshold = 70
+                sample_bcis[site].run()
 
         return sample_bcis, site_bcis
 
