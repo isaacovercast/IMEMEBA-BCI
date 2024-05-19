@@ -45,6 +45,8 @@ class BCI:
         self._verbose = verbose
 
         self._min_clust_threshold = 80
+        self._vsearch_threads = 4
+        self.cores = 20
 
 
     # FIXME: Is swarm better here? It works quite differently, and wouldn't work
@@ -66,6 +68,7 @@ class BCI:
                    "-notmatched", f"{outfile}.htmp",
                    "-fasta_width", "0",
                    "-fulldp",
+                   "-threads", f"{self._vsearch_threads}",
                    "-usersort"]
             self.cmds.append(' '.join(cmd))
             self.seed_files.append(f"{outfile}.htmp")
@@ -78,7 +81,7 @@ class BCI:
         # Build the list of vsearch commands
         self._build_cmds()
         # Run all vsearch commands in parallel
-        results = joblib.Parallel(n_jobs=20)(joblib.delayed(\
+        results = joblib.Parallel(n_jobs=self.cores)(joblib.delayed(\
                                     self._systemcall)(f) for f in self.cmds)
         # Count the number of lines in each seed file, this is the number
         # of clusters at a given clustering threshold 
@@ -95,6 +98,11 @@ class BCI:
             print(f"  No 3% diversity in {self._label}, skipping nucleotide diversity.")
         except Exception as inst:
             raise
+
+
+    def clean(self):
+        shutil.rmtree(self.tmpdir)
+
 
     def plot(self, ax=None, log=True, normalize=False, plot_pis=False, **kwargs):
         if not ax:
@@ -138,7 +146,7 @@ class BCI:
         return fig, ax
 
 
-    def transform(self, transformation=None, fraction=0.5):
+    def transform(self, transformation=None, fraction=0.5, count=None):
         """
         Perform a transformation on the raw data.
         raw - Reset data to clean raw format
@@ -146,18 +154,20 @@ class BCI:
         invasion - Randomly sample one individual and replace a fraction of the community with it
 
         fraction is the proportion of the community to transform by the disturbance
+        count should be positive int and is only used by the 'resample' method
         """
         # Rewind any transformations applied and revert to the raw data
         self.data = self._data
-        if transformation == "raw":
-            # If raw then just reset the raw data ane return
+        if transformation == "reset":
+            # If reset then just reset the raw data and return
             self._label = self.samp
-        elif transformation in ["disturbance", "invasion"]:
+        elif transformation in ["disturbance", "invasion", "resample"]:
             trans = transformation[:4]
             self._label = f"{self.samp}-{trans}-{fraction}"
+            if not count == None and transformation == "resample":
+                self._label = f"{self.samp}-{trans}-{count}"
             with open(self.data, 'r') as infile:
                 ofile = os.path.join(self.tmpdir, f"{self._label}.{self._ftype}")
-                if self._verbose: print(ofile)
                 with open(ofile, 'w') as outfile:
                     lines = 4 if 'q' in self._ftype else 2
                     seqdealer = zip(*[iter(infile)] * lines)
@@ -166,7 +176,7 @@ class BCI:
                         for x in seqdealer:
                             if random.random() > fraction:
                                 outfile.write(''.join(x))
-                    else:
+                    elif transformation == "invasion":
                         invader = next(seqdealer)
                         outfile.write(''.join(invader))
                         for x in seqdealer:
@@ -174,9 +184,24 @@ class BCI:
                                 outfile.write(''.join(invader))
                             else:
                                 outfile.write(''.join(x))
+                    elif transformation == "resample":
+                        if count <= 0:
+                            raise Exception(f"In BCI.transform() `count` must be >= 0. You put: {count}")
+                        nseqs = len(open(self.data, 'r').readlines())/lines
+                        # Get random indices to retain equal to length `count`
+                        replace = False
+                        if count > nseqs:
+                            replace = True
+                            print(  f"  warning: count < nseqs: resampling with replacement")
+                        sidx = np.random.choice(range(int(nseqs)), count, replace=replace)
+                        for idx, x in enumerate(seqdealer):
+                            if idx in sidx:
+                                outfile.write(''.join(x))
+                if self._verbose: print(f"  Wrote transformed data to: {ofile}")
+
             self.data = ofile      
         else:
-            raise ValueError("transform() argument must be one of: raw, disturbance.")
+            raise ValueError("transform() argument must be one of: reset, disturbance, invasion, resample.")
 
 
     def _systemcall(self, to_exec):
@@ -408,7 +433,10 @@ def plot_multi(bci_list, ax=None, log=True, normalize=False, plot_pis=False, cma
         else:
             # Raw results for untransformed data will be saved in the results
             # dict keyed by the sample name
-            data = bci._results[bci.samp][0]
+            # Why did I do this? It's not obvious why you wouldn't want to
+            # just plot the most recent run of the data. Here is what I was doing before:
+            # data = bci._results[bci.samp][0]
+            data = bci.bci
             # log transform
             data = np.log(data) if log else np.array(data)
         # normalize

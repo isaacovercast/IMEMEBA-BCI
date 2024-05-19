@@ -144,21 +144,29 @@ class Project:
         return site_fastas
 
 
-    def run(self, samples=True, sites=True, verbose=False):
+    def run(self, samples=True, sites=True, resample=None, verbose=False):
         if samples:
-            print(f"  Processing {len(self.sample_fastas)} samples.")
-            for sample, fasta in self.sample_fastas.items():
+            self.sample_bcis = {}
+            if samples == True: samples = self.samples
+            print(f"  Processing {len(samples)} samples.")
+            for sample in samples:
                 if verbose: print(sample)
-                self.sample_bcis[sample] = BCI.BCI(data=fasta, verbose=verbose)
+                self.sample_bcis[sample] = BCI.BCI(data=self.sample_fastas[sample], verbose=verbose)
                 self.sample_bcis[sample]._min_clust_threshold = 70
+                if resample:
+                    self.sample_bcis[sample].transform(transformation="resample", count=resample)
                 self.sample_bcis[sample].run()
 
         if sites:
-            print(f"  Processing {len(self.site_fastas)} sites.")
-            for site, fasta in self.site_fastas.items():
+            self.site_bcis = {}
+            if sites == True: sites = self.sites
+            print(f"  Processing {len(sites)} sites.")
+            for site in sites:
                 if verbose: print(site)
-                self.site_bcis[site] = BCI.BCI(data=fasta, verbose=verbose)
+                self.site_bcis[site] = BCI.BCI(data=self.site_fastas[site], verbose=verbose)
                 self.site_bcis[site]._min_clust_threshold = 70
+                if resample:
+                    self.site_bcis[site].transform(transformation="resample", count=resample)
                 self.site_bcis[site].run()
 
 
