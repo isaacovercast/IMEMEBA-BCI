@@ -1,0 +1,12 @@
+# conda-forge
+notebook
+matplotlib
+pandas
+joblib
+muscle
+
+# bioconda
+vsearch
+
+# Not necessary yet
+# scipy

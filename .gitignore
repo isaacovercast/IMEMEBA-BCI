@@ -1,6 +1,4 @@
 # Local data
-MMs/
-MiSeq_SOP/
 jupyter-notebooks/analysis
 # Ignore tmpdirs created by BCI.py
 .tmpdir*
