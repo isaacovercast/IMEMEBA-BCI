@@ -46,6 +46,7 @@ class BCI:
 
         self._min_clust_threshold = 80
         self._vsearch_threads = 4
+        self._pseudo_variable_sites = 0
         self.cores = 20
 
 
@@ -214,7 +215,7 @@ class BCI:
         return(stdout, stderr, retval)
 
 
-    def nucleotide_diversity(self, OTU_threshold=0.97, simulated=False, verbose=False):
+    def nucleotide_diversity(self, OTU_threshold=0.97, pseudo_variable_sites=0, simulated=False, verbose=False):
         """
         Calculate nucleotide diversity per species/OTU for the entire dataset.
 
@@ -241,7 +242,12 @@ class BCI:
             #   species_ID_2    CCGGC
             seq_df = pd.DataFrame(dat[1::2], index=[x.rsplit("_", 1)[0][1:] for x in dat[::2]], columns=["seqs"])
             for spid in self.pis.keys():
-                self.pis[spid] = self._nucleotide_diversity(seq_df.loc[spid]["seqs"])
+                # handle the case where there is only one seq in the seq_df, in which case
+                # it returns a raw string rather than an array
+                seqs = seq_df.loc[spid]["seqs"]
+                if isinstance(seqs, str):
+                    seqs = pd.Series(seqs)
+                self.pis[spid] = self._nucleotide_diversity(seqs)
 
         if simulated:
             ## Only want to do this for simulated data because empirical data doesn't have
@@ -249,7 +255,9 @@ class BCI:
             pi_from_fasta(self.data)
             self.sim_pis = self.pis.copy()
 
-        aligned = self._align_OTUs(OTU_threshold=OTU_threshold, verbose=verbose)
+        aligned = self._align_OTUs(OTU_threshold=OTU_threshold,
+                                    pseudo_variable_sites=pseudo_variable_sites,
+                                    verbose=verbose)
         pi_from_fasta(aligned)
 
 
@@ -288,7 +296,7 @@ class BCI:
         return pi/len(seqs.iloc[0])
 
 
-    def _align_OTUs(self, OTU_threshold=0.97, verbose=False):
+    def _align_OTUs(self, OTU_threshold=0.97, pseudo_variable_sites=0, verbose=False):
         # Read the utmp file to get hits matching to seeds
         # Retain only columns 0 (hits) and 1 (seeds). Set the index to the seed names
         utmp = glob.glob(self.tmpdir+f"/*{OTU_threshold}*.utmp")[0]
@@ -302,7 +310,9 @@ class BCI:
         shutil.rmtree(tmp_fastadir, ignore_errors=True)
         os.mkdir(tmp_fastadir)
 
+        # Using the 'seeds' column as the index and retaining the 'hits' column as data
         clusts = pd.read_csv(utmp, sep="\t", header=None, usecols=[0,1], index_col=1)
+        # otus == the seed sequence IDs
         otus = set(clusts.index)
 
         # Get a data frame formatted with the zotu name as the index, like this:
@@ -317,6 +327,19 @@ class BCI:
             with open(f"{tmp_fastadir}/{otu}.fasta", 'w') as outfile:
                 for idx, seq in enumerate(seqs):
                     outfile.write(f">{otu}_{idx}\n{seq}\n")
+
+        # Identify singleton sequences (unique sequences w/o any hits)
+        # Singletons are any sequences in the seq_df that are NOT a hit or seed in the utmp file
+        hits = np.append(clusts[0].values, list(otus))
+        singletons = seq_df[~seq_df.index.isin(hits)]
+
+        for zid, seq in singletons.items():
+            seqs = [seq.lower()]
+            if pseudo_variable_sites:
+                seqs = seqs.append(seq.replace('a', 't', pseudo_variable_sites))
+            with open(f"{tmp_fastadir}/{zid}.fasta", 'w') as outfile:
+                for idx, seq in enumerate(seqs):
+                    outfile.write(f">{zid}_{idx}\n{seq}\n")
 
         if verbose: print("Aligning..")
         self._muscle_cmds = []
