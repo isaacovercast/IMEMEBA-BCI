@@ -46,6 +46,7 @@ class BCI:
 
         self._min_clust_threshold = 80
         self._vsearch_threads = 4
+        self._OTU_threshold = 0.97
         self._pseudo_variable_sites = 0
         self.cores = 20
 
@@ -94,7 +95,10 @@ class BCI:
         self._results[self._label].append(self.bci)
 
         try:
-            self.nucleotide_diversity(simulated=simulated, verbose=verbose)
+            self.nucleotide_diversity(simulated=simulated,
+                                        OTU_threshold=self._OTU_threshold,
+                                        pseudo_variable_sites=self._pseudo_variable_sites,
+                                        verbose=verbose)
         except pd.errors.EmptyDataError:
             print(f"  No 3% diversity in {self._label}, skipping nucleotide diversity.")
         except Exception as inst:
@@ -259,41 +263,7 @@ class BCI:
                                     pseudo_variable_sites=pseudo_variable_sites,
                                     verbose=verbose)
         pi_from_fasta(aligned)
-
-
-    ## FIXME: This should be in a util or stats package
-    def _nucleotide_diversity(self, seqs, verbose=False):
-        """
-        Calculate nucleotide diversity from a list of sequences.
-        `seqs` input should be a list of aligned sequences
-        """
-        pi = 0
-
-        ## If no sequences or no variation
-        if len(seqs) <= 1: return 0
-
-        ## Transpose, so now we have a list of lists of all bases at each
-        ## position.
-        dat = np.transpose(np.array([list(x) for x in seqs]))
-
-        ## for each position
-        for d in dat:
-            ## If the position is _not_ monomorphic
-            if len(Counter(d)) > 1:
-                if verbose: print(Counter(d))
-                ## Enumerate the possible comparisons and for each
-                ## comparison calculate the number of pairwise differences,
-                ## summing over all sites in the sequence.
-                base_count = Counter(d)
-                ## ignore indels
-                del base_count["-"]
-                del base_count["N"]
-                for c in combinations(base_count.values(), 2):
-                    #print(c)
-                    n = c[0] + c[1]
-                    n_comparisons = float(n) * (n - 1) / 2
-                    pi += float(c[0]) * (n-c[0]) / n_comparisons
-        return pi/len(seqs.iloc[0])
+        self.hill_numbers = [self._generalized_hill_number(list(self.pis.values()), order=x) for x in range(4)]
 
 
     def _align_OTUs(self, OTU_threshold=0.97, pseudo_variable_sites=0, verbose=False):
@@ -336,7 +306,7 @@ class BCI:
         for zid, seq in singletons.items():
             seqs = [seq.lower()]
             if pseudo_variable_sites:
-                seqs = seqs.append(seq.replace('a', 't', pseudo_variable_sites))
+                seqs.append(seq.replace('a', 't', pseudo_variable_sites))
             with open(f"{tmp_fastadir}/{zid}.fasta", 'w') as outfile:
                 for idx, seq in enumerate(seqs):
                     outfile.write(f">{zid}_{idx}\n{seq}\n")
@@ -408,6 +378,102 @@ class BCI:
 
         with open(os.path.join(outdir, self.samp)+".pis", 'w') as outfile:
             outfile.write(",".join(sorted(data, reverse=True))+"\n")
+
+
+###################
+# Stats functions
+# FIXME: This should be in a util or stats package
+###################
+
+    def _nucleotide_diversity(self, seqs, verbose=False):
+        """
+        Calculate nucleotide diversity from a list of sequences.
+        `seqs` input should be a list of aligned sequences
+        """
+        pi = 0
+
+        ## If no sequences or no variation
+        if len(seqs) <= 1: return 0
+
+        ## Transpose, so now we have a list of lists of all bases at each
+        ## position.
+        dat = np.transpose(np.array([list(x) for x in seqs]))
+
+        ## for each position
+        for d in dat:
+            ## If the position is _not_ monomorphic
+            if len(Counter(d)) > 1:
+                if verbose: print(Counter(d))
+                ## Enumerate the possible comparisons and for each
+                ## comparison calculate the number of pairwise differences,
+                ## summing over all sites in the sequence.
+                base_count = Counter(d)
+                ## ignore indels
+                del base_count["-"]
+                del base_count["N"]
+                for c in combinations(base_count.values(), 2):
+                    #print(c)
+                    n = c[0] + c[1]
+                    n_comparisons = float(n) * (n - 1) / 2
+                    pi += float(c[0]) * (n-c[0]) / n_comparisons
+        return pi/len(seqs.iloc[0])
+
+
+    def _generalized_hill_number(self, abunds, vals=None, order=1, scale=True, verbose=False):
+        """
+        This is the Chao et al (2014) generalized Hill # formula. Generalized
+        function to calculate one Hill number from a distribution of values of
+        some statistic and abundances.
+
+        :param array-like abunds: An `array-like` of abundances per species.
+        :param array-like vals: An `array-like` of values per species (e.g.
+            pi values per species, or trait values per species). If this parameter
+            is empty then only abundance Hill numbers are calculated.
+        :param float order: The Hill number to calculate. 0 is species richness.
+            Positive values calculate Hill numbers placing increasing weight on
+            the most abundant species. Negative values can also be specified
+            (placing more weight on the rare species), but these are uncommonly
+            used in practice.
+        :param bool scale: Whether to scale to effective numbers of species, or
+            return the raw attribute diversity. Equivalent to equation 5c in
+            Chao et al 2014. You will almost never want to disable this.
+
+        :return float: The generalized Hill number of order `order` for the given
+            data axis using the formula proposed by Chao et al (2014).
+        """
+        ## Degenerate edge cases can cause all zero values, particulary for pi
+        ## in which case we bail out immediately
+        if not np.any(abunds):
+            return 0
+
+        ## Be sure abundance is scaled to relative abundance and convert to np
+        abunds = np.array(abunds)/np.sum(abunds)
+
+        ## If vals is empty then populate the vector with a list of ones
+        ## and this function collapses to the standard Hill number for abundance
+        if vals is None:
+            vals = np.ones(len(abunds))
+
+        ## Make sure vals is an np array or else order > 2 will act crazy
+        vals = np.array(vals)
+        if verbose: print(("sums:", "dij", np.sum(vals), "pij", np.sum(abunds)))
+        ## sum of values weighted by abundance
+        V_bar = np.sum(vals*abunds)
+        if verbose: print(("vbar", V_bar))
+
+        ## Use the special formula for order = 1
+        if order == 1:
+            if np.any(abunds == 0):
+                # If any values are 0 (legal values for pi) then log flips out
+                # so fall back to the scipy.stats version
+                h = np.exp(entropy(abunds))
+            else:
+                proportions = vals*(abunds/V_bar)
+                h = np.exp(-np.sum(proportions * np.log(abunds/V_bar)))
+        else:
+            h = np.sum(vals*(abunds/V_bar)**order)**(1./(1-order))
+        if scale: h = h/V_bar
+        return h
 
 
 ###################
