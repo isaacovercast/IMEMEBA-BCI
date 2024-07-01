@@ -32,6 +32,7 @@ class Project:
         self.sample_fastas = self._make_sample_fastas(verbose)
 
         self.site_fastas = {}
+        self.sitemap = {}
         if not sitemap == None:
             self.sitemap, self.samples_per_site = self._read_sitemap(sitemap)
             self._site_fastadir = os.path.join(self.project_dir, "site_fastas")
@@ -71,7 +72,7 @@ class Project:
 
     def _read_sitemap(self, sitemap):
         # Allow to auto-detect csv delimiter
-        sitemap = pd.read_csv(sitemap, comment="#", names=["sample", "site"], sep=None, engine='python')
+        sitemap = pd.read_csv(sitemap, comment="#", names=["sample", "site"], sep=None, engine='python', dtype=str)
 
         group = sitemap.groupby(["site"])
         samples_per_site = {site[0]: list(set(group["sample"])) for site, group in group}
@@ -157,7 +158,8 @@ class Project:
                     self.sample_bcis[sample].transform(transformation="resample", count=resample)
                 self.sample_bcis[sample].run()
 
-        if sites:
+        # Only process sites if self.sitemap has been loaded
+        if sites and len(self.sitemap):
             self.site_bcis = {}
             if sites == True: sites = self.sites
             print(f"  Processing {len(sites)} sites.")
@@ -174,13 +176,13 @@ class Project:
         pass
 
 
-    def plot_sites(self, ax=None, include=None, exclude=None, plot_pis=False, cmaps=None):
+    def plot_sites(self, ax=None, include=None, exclude=None, log=True, plot_pis=False, cmaps=None):
         if cmaps == None:
             cmaps = {"Spectral", self.sites}
 
         for cmap, sites in cmaps.items():
             fig, ax = BCI.plot_multi([self.site_bcis[x] for x in sites],
-                   ax=ax, cmap=cmap, log=False, normalize=False, plot_pis=plot_pis)
+                   ax=ax, cmap=cmap, log=log, normalize=False, plot_pis=plot_pis)
 
         return fig, ax
 
