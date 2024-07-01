@@ -44,6 +44,7 @@ class BCI:
         self._results = {}
         self._verbose = verbose
 
+        # FIXME: Make all of these setable in an easy way
         self._min_clust_threshold = 80
         self._vsearch_threads = 4
         self._OTU_threshold = 0.97
@@ -78,7 +79,6 @@ class BCI:
 
     ## FIXME: Add a check that vsearch is installed
     ## FIXME: Make n_jobs dynamic
-    ## FIXME: Auto-calculate nucleotide diversity at 97% clustering
     def run(self, simulated=False, verbose=False):
         # Build the list of vsearch commands
         self._build_cmds()
@@ -251,7 +251,10 @@ class BCI:
                 seqs = seq_df.loc[spid]["seqs"]
                 if isinstance(seqs, str):
                     seqs = pd.Series(seqs)
-                self.pis[spid] = self._nucleotide_diversity(seqs)
+                pi = self._nucleotide_diversity(seqs)
+                # Add a very small value to all pis
+                if self._pseudo_variable_sites: pi += 0.0001
+                self.pis[spid] = pi
 
         if simulated:
             ## Only want to do this for simulated data because empirical data doesn't have
@@ -281,7 +284,9 @@ class BCI:
         os.mkdir(tmp_fastadir)
 
         # Using the 'seeds' column as the index and retaining the 'hits' column as data
-        clusts = pd.read_csv(utmp, sep="\t", header=None, usecols=[0,1], index_col=1)
+        clusts = pd.read_csv(utmp, sep="\t", header=None, usecols=[0,1], index_col=1, dtype=str)
+        # force seeds column to str to protect against OTU ids that are auto-detected as 'int'
+        clusts.index = clusts.index.astype(str)
         # otus == the seed sequence IDs
         otus = set(clusts.index)
 
@@ -304,9 +309,13 @@ class BCI:
         singletons = seq_df[~seq_df.index.isin(hits)]
 
         for zid, seq in singletons.items():
-            seqs = [seq.lower()]
-            if pseudo_variable_sites:
-                seqs.append(seq.replace('a', 't', pseudo_variable_sites))
+
+            seqs = [seq]
+            ##FIXME: The pseudo_variable_sites thing got on my nerves quickly. It's faster and
+            ##       it's easier to just set singletons to a very small value.
+            #seqs = [seq.lower()]
+            #if pseudo_variable_sites:
+            #    seqs.append(seq.replace('a', 't', pseudo_variable_sites))
             with open(f"{tmp_fastadir}/{zid}.fasta", 'w') as outfile:
                 for idx, seq in enumerate(seqs):
                     outfile.write(f">{zid}_{idx}\n{seq}\n")
@@ -530,7 +539,7 @@ def plot_multi(bci_list, ax=None, log=True, normalize=False, plot_pis=False, cma
             data = np.log(data) if log else np.array(data)
         # normalize
         norm = data.sum() if normalize else 1
-        ax.plot(data/norm, label=bci.samp, color=cdict[bci.samp], **kwargs)
+        ax.plot(data/norm, label=bci.samp, color=cdict[bci.samp], lw=2, **kwargs)
     #ax.legend(loc='upper right', bbox_to_anchor=(0.97, 0.97), labels=bci_labels)
     plt.legend()
     return fig, ax
