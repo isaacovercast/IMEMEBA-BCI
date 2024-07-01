@@ -27,8 +27,8 @@ class BCI:
 
         # Retain a reference to the untransformed data
         self._data = data
-        # Get the name of this sample
-        self.samp = data.split("/")[-1].split(".")[0]
+        # Get the name of this sample. Allow sample names to include '.'
+        self.samp = data.split("/")[-1].rsplit(".", 1)[0]
         # Is the input fastq or fasta?
         self._ftype = data.split(".")[-1]
 
