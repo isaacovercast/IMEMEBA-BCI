@@ -14,6 +14,7 @@ class Project:
                  asv_table,
                  fasta_file,
                  sitemap=None,
+                 drop_duplicates=True,
                  verbose=False):
         """
         """
@@ -37,7 +38,7 @@ class Project:
             self.sitemap, self.samples_per_site = self._read_sitemap(sitemap)
             self._site_fastadir = os.path.join(self.project_dir, "site_fastas")
 
-            self.site_fastas = self._make_site_fastas(verbose)
+            self.site_fastas = self._make_site_fastas(drop_duplicates=drop_duplicates, verbose=verbose)
 
         self.sample_bcis = {}
         self.site_bcis = {}
@@ -122,7 +123,7 @@ class Project:
         return sample_fastas
 
 
-    def _make_site_fastas(self, subset_samples=None, verbose=False):
+    def _make_site_fastas(self, subset_samples=None, drop_duplicates=False, verbose=False):
         if os.path.exists(self._site_fastadir):
             shutil.rmtree(self._site_fastadir)
         if not os.path.exists(self._site_fastadir):
@@ -135,12 +136,19 @@ class Project:
             # Standardize sampling to n random samples per site 
             if subset_samples:
                 samples = np.random.choice(samples, subset_samples, replace=False)
+            # Accumulate ASV fasta data across all samples
+            fasta_data = []
             for sample in samples:
                 zotus = self.zotus_per_sample[sample]
-                fasta_data = self.seq_df.loc[zotus]
-                with open(site_fasta, 'a') as outfile:
-                    for k, v in fasta_data.items():
-                        outfile.write(f">{k}\n{v}\n")
+                fasta_data.append(self.seq_df.loc[zotus])
+            # Join all ASVs across samples into one Series
+            fasta_data = pd.concat(fasta_data)
+            # If there are duplicate ASVs among sites remove these before clustering
+            if drop_duplicates:
+                fasta_data = fasta_data.drop_duplicates()
+            with open(site_fasta, 'a') as outfile:
+                for k, v in fasta_data.items():
+                    outfile.write(f">{k}\n{v}\n")
             site_fastas[site] = site_fasta
         return site_fastas
 
@@ -178,7 +186,7 @@ class Project:
 
     def plot_sites(self, ax=None, include=None, exclude=None, log=True, plot_pis=False, cmaps=None):
         if cmaps == None:
-            cmaps = {"Spectral", self.sites}
+            cmaps = {"Spectral":self.site_bcis.keys()}
 
         for cmap, sites in cmaps.items():
             fig, ax = BCI.plot_multi([self.site_bcis[x] for x in sites],
