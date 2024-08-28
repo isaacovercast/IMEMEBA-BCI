@@ -323,9 +323,9 @@ class BCI:
         if verbose: print("Aligning..")
         self._muscle_cmds = []
         for fa in glob.glob(f"{tmp_fastadir}/*.fasta"):
-            outfile = f"{fa}.aln"
+            outfile = f"'{fa}.aln'"
             cmd = ["muscle",
-                    "-align", f"{fa}",
+                    "-align", f"'{fa}'",
                     "-output", f"{outfile}",
                     "-quiet",
                     "-threads", "2"]
